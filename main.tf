@@ -44,7 +44,7 @@ module "infrastructure_ec2" {
 }
 
 resource "aws_s3_bucket" "example" {
-  bucket = "my-tf-test-bucket"
+  bucket = "my-bucket"
 
   tags = {
     Name        = "My bucket"
