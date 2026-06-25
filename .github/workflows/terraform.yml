@@ -33,11 +33,6 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init -input=false
-        working-directory: .
-
-      - name: Terraform Init
-        id: init
         run: terraform init
         working-directory: .
 
