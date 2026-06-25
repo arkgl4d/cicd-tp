@@ -1,0 +1,69 @@
+---
+- name: YNOV TP 2 deployment
+  hosts: all
+  become: true # Permet de passer en sudo pour exécuter les commandes d'administration
+
+  tasks:
+    # 1. Installer Nginx — via le module apt (mettre à jour le cache)
+    - name: Installer Nginx et mettre à jour le cache apt
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    # 2. Créer le répertoire de l'application
+    - name: Créer le répertoire de l'application avec les bons droits
+      ansible.builtin.file:
+        path: /var/www/html/olympic-games-starter
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0770'
+
+    # 3. Copier les fichiers Angular
+    - name: Copier les fichiers de l'application Angular
+      ansible.builtin.copy:
+        src: app/olympic-games-starter/
+        dest: /var/www/html/olympic-games-starter/
+        owner: www-data
+        group: www-data
+        mode: '0644'
+
+    # 4. Copier la configuration Nginx
+    - name: Copier la configuration Nginx
+      ansible.builtin.copy:
+        src: nginx/app.conf
+        dest: /etc/nginx/sites-available/app.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Redémarrer Nginx # Déclenche le handler si le fichier est modifié
+
+    # 5. Activer le site Nginx (lien symbolique)
+    - name: Activer le site Nginx en créant le lien symbolique
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/app.conf
+        dest: /etc/nginx/sites-enabled/app.conf
+        state: link
+      notify: Redémarrer Nginx # Déclenche aussi le handler si le lien est créé
+
+    # 6. Désactiver le site Nginx par défaut
+    - name: Désactiver le site Nginx par défaut (supprimer le lien)
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Redémarrer Nginx # Déclenche le handler si le fichier par défaut est supprimé
+
+    # 7. Démarrer et activer Nginx
+    - name: S'assurer que Nginx est démarré et activé au démarrage
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+
+  handlers:
+    # 8. Redémarrer Nginx — handler déclenché automatiquement
+    - name: Redémarrer Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted

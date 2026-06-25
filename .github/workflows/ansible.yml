@@ -1,0 +1,117 @@
+name: Ansible Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  ansible:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      ##########################################################################
+      # MANAGED NODE — Docker container acting as the remote SSH target
+      ##########################################################################
+
+      - name: Generate SSH key pair
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ''
+          mkdir -p ansible
+          cp ~/.ssh/id_rsa.pub ansible/authorized_keys
+
+      - name: Build managed node image
+        run: docker build -t managed-node ./ansible
+
+      - name: Start managed node container
+        run: |
+          docker run -d --rm --name managed-node -p 2222:22 -p 80:80 managed-node
+
+      - name: Wait for SSH to be ready
+        run: |
+          TIMEOUT=30
+          ELAPSED=0
+          until ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 \
+              -i ~/.ssh/id_rsa -p 2222 ynov@127.0.0.1 echo "SSH ready" 2>/dev/null; do
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "Timed out waiting for SSH after ${TIMEOUT}s"
+              docker logs managed-node
+              exit 1
+            fi
+            echo "Waiting for SSH... (${ELAPSED}s)"
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+          done
+
+      ##########################################################################
+      # ANSIBLE
+      ##########################################################################
+      - name: Install Ansible and tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible ansible-lint
+
+      ##########################################################################
+      # LINT & SECURITY — run before playbook execution
+      ##########################################################################
+
+      - name: Ansible Lint
+        id: lint
+        run: ansible-lint deploy.yml > ansible-lint-report.txt || true
+        working-directory: ./ansible
+        continue-on-error: true
+
+      - name: Checkov scan for Ansible
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: ./ansible
+          framework: ansible
+
+      - name: Checkov Report
+        id: checkov-report
+        if: always()
+        working-directory: ./ansible
+        run: |
+          if [ -f results_github_failed_only.md ]; then
+            while IFS= read -r line; do
+              echo "$line" >> $GITHUB_STEP_SUMMARY
+            done < results_github_failed_only.md
+          fi
+
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook deploy.yml -i hosts_docker --private-key ~/.ssh/id_rsa --user ynov
+        working-directory: ./ansible
+
+      - name: Verify Nginx is running on managed node
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p 2222 ynov@127.0.0.1 \
+            "pgrep nginx && echo 'Nginx is running' || (echo 'Nginx is NOT running' && exit 1)"
+
+      - name: Verify Nginx serves HTTP traffic
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:80)
+          echo "HTTP status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            exit 1
+          fi
+
+      - name: Publish Report
+        if: always()
+        run: |
+          echo '## Ansible Lint Report' >> $GITHUB_STEP_SUMMARY
+          if [ -f ansible/ansible-lint-report.txt ]; then
+            cat ansible/ansible-lint-report.txt >> $GITHUB_STEP_SUMMARY
+          else
+            echo 'No ansible-lint report found.' >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '' >> $GITHUB_STEP_SUMMARY
+          echo '## Checkov Report' >> $GITHUB_STEP_SUMMARY
+          if [ -f ansible/results_github_failed_only.md ]; then
+            cat ansible/results_github_failed_only.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo 'No Checkov failure report found.' >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,7 @@
+services:
+  target:
+    build: .
+    container_name: ansible-target
+    ports:
+      - "2222:22"
+    restart: unless-stopped
