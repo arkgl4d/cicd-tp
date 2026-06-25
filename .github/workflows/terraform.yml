@@ -36,9 +36,24 @@ jobs:
         run: terraform init -input=false
         working-directory: .
 
+      - name: Wait for LocalStack to be ready
+        run: |
+          TIMEOUT=60
+          ELAPSED=0
+          until curl -s http://localhost:4566/_localstack/health | grep -E '"s3"[[:space:]]*:[[:space:]]*"(running|available)"'; do
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "Timed out waiting for LocalStack after ${TIMEOUT}s"
+              curl -s http://localhost:4566/_localstack/health
+              exit 1
+            fi
+            echo "Waiting for LocalStack... (${ELAPSED}s)"
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+          done
+
       - name: Terraform Plan
         id: plan
-        run: terraform plan -var-file=dev.tfvars -out=tfplan
+        run: terraform plan -input=false -var-file=dev.tfvars -out=tfplan
         working-directory: .
         continue-on-error: true
 
