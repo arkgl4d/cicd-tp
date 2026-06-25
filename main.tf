@@ -43,12 +43,11 @@ module "infrastructure_ec2" {
   instance_type = var.instance_type
 }
 
-resource "aws_s3_bucket" "my_bucket" {
-  bucket        = "my-bucket"
-  acl           = "private"
-  force_destroy = true
+resource "aws_s3_bucket" "example" {
+  bucket = "my-tf-test-bucket"
 
   tags = {
-    Name = "my-bucket"
+    Name        = "My bucket"
+    Environment = "Dev"
   }
 }
