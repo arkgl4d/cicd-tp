@@ -55,7 +55,7 @@ resource "aws_route_table_association" "public_assoc" {
 
 # Security Group
 resource "aws_security_group" "ec2_sg" {
-  name        = "${var.environment}"
+  name        = var.environment
   description = "Security group pour l'environnement ${var.environment}"
   vpc_id      = aws_vpc.custom_vpc.id
 

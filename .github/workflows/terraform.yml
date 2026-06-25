@@ -62,9 +62,13 @@ jobs:
         if: always()
         working-directory: .
         run: |
-          while IFS= read -r line; do
-            echo "$line" >> $GITHUB_STEP_SUMMARY
-          done < results_github_failed_only.md
+          if [ -f results_github_failed_only.md ]; then
+            while IFS= read -r line; do
+              echo "$line" >> $GITHUB_STEP_SUMMARY
+            done < results_github_failed_only.md
+          else
+            echo "No Checkov failures found." >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
