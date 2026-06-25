@@ -1,10 +1,11 @@
 provider "aws" {
-  access_key                  = "test"
-  secret_key                  = "test"
-  region                      = "us-east-1"
-  s3_use_path_style           = true
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
+  access_key                     = "test"
+  secret_key                     = "test"
+  region                         = "us-east-1"
+  s3_use_path_style              = true
+  skip_credentials_validation    = true
+  skip_metadata_api_check        = true
+  skip_requesting_account_id     = true
 
   endpoints {
     apigateway     = "http://localhost:4566"
@@ -40,4 +41,14 @@ module "infrastructure_ec2" {
   vpc_cidr      = var.vpc_cidr
   subnet_cidr   = var.subnet_cidr
   instance_type = var.instance_type
+}
+
+resource "aws_s3_bucket" "my_bucket" {
+  bucket        = "my-bucket"
+  acl           = "private"
+  force_destroy = true
+
+  tags = {
+    Name = "my-bucket"
+  }
 }
